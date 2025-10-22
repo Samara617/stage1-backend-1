@@ -1,0 +1,27 @@
+{
+  "name": "string-analyzer",
+  "version": "1.0.0",
+  "description": "Stage-1 String Analyzer Service (Express + Prisma + Postgres)",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "prisma:push": "prisma db push",
+    "prisma:generate": "prisma generate",
+    "postinstall": "prisma generate"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "morgan": "^1.10.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0",
+    "prisma": "^5.19.1"
+  }
+}
