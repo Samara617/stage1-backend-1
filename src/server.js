@@ -1,7 +1,6 @@
-require('dotenv').config();
-const app = require('./app');
+import app from "./app.js";
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`String Analyzer listening on :${PORT}`);
+const port = process.env.PORT || 8080;
+app.listen(port, () => {
+  console.log(`String Analyzer up on ${port}`);
 });

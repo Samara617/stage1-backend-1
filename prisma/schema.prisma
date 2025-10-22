@@ -1,23 +1,20 @@
+// SQLite so you don’t need external services. Easy to swap to Postgres later.
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-model StringItem {
-  id                       String   @id                // sha256 hex of value
-  value                    String   @unique
-  length                   Int
-  is_palindrome            Boolean
-  unique_characters        Int
-  word_count               Int
-  character_frequency_map  Json
-  created_at               DateTime @default(now())
-
-  @@index([is_palindrome])
-  @@index([length])
-  @@index([word_count])
+// Example table; adapt to your model
+model AnalyzedString {
+  id           String @id @default(cuid())
+  value        String
+  length       Int
+  is_palindrome Boolean
+  unique_chars Int
+  word_count   Int
+  sha256_hash  String @unique
+  createdAt    DateTime @default(now())
 }

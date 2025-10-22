@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: analyzer
+      POSTGRES_PASSWORD: analyzer
+      POSTGRES_DB: analyzer
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    depends_on:
+      - db
+    environment:
+      PORT: 8080
+      DATABASE_URL: "postgresql://analyzer:analyzer@db:5432/analyzer?schema=public"
+    ports:
+      - "8080:8080"
+    command: sh -c "npm run prisma:push && npm start"
+
+volumes:
+  pgdata:

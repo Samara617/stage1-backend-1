@@ -1,22 +1,24 @@
-FROM node:20-bookworm-slim
+# Dockerfile
+FROM node:20-alpine
+
+# Needed by Prisma engines & OpenSSL
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
-# Prisma engine depends on OpenSSL in Debian
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
-
-# Copy lockfile and Prisma schema BEFORE install (postinstall runs prisma generate)
+# Install deps first (better layer caching)
 COPY package*.json ./
-COPY prisma ./prisma
+RUN npm ci --omit=dev || npm install --omit=dev
 
-# Install deps (runs "postinstall": "prisma generate")
-RUN npm ci
+# Copy the rest (including prisma/)
+COPY . .
 
-# Copy application source
-COPY src ./src
+# Build Prisma client ahead of time (no-op if not using Prisma)
+RUN npm run prisma:generate || true
 
-ENV NODE_ENV=production
+# Default envs; the real values come from runtime
 ENV PORT=8080
 EXPOSE 8080
 
-# Push schema on boot, then start
-CMD ["sh", "-c", "npm run prisma:push && npm run start"]
+# If you use SQLite (Mode A) we’ll run prisma:push at start via compose or override
+CMD ["npm","start"]
