@@ -1,3 +1,4 @@
 node_modules
 .git
-.prisma
+.env
+npm-debug.log*
