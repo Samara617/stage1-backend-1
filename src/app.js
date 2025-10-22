@@ -15,6 +15,20 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use('/strings', stringsRouter);
 
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'String Analyzer API',
+    status: 'ok',
+    docs: {
+      health: '/health',
+      create: 'POST /strings',
+      list: 'GET /strings',
+      get_specific: 'GET /strings/{string_value}',
+      natural_language: 'GET /strings/filter-by-natural-language?query=...',
+      delete: 'DELETE /strings/{string_value}'
+    }
+  });
+});
 
 // 404 fallback
 app.use((req, res) => {
