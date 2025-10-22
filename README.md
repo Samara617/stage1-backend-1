@@ -1,3 +1,266 @@
+Here’s a drop-in **README.md** you can add to your Stage-1 Backend repo that explains exactly what you changed to make it Stage-1 DevOps-ready, plus how to run it locally, in Docker, and through your `deploy.sh`. Paste this into `README.md` at the root of your backend project.
+
+---
+
+# String Analyzer — Stage 1 Backend → DevOps-Ready
+
+A minimal REST API that analyzes strings (length, palindrome, unique chars, etc.).
+This repo has been updated to be **DevOps-ready for Stage-1**: containerized, health-checked, and deployable via a single `deploy.sh` to a remote Ubuntu server with Docker + Nginx.
+
+---
+
+## What changed for Stage-1 DevOps
+
+**TL;DR:** We added containerization and deployment plumbing, without changing core behavior.
+
+* **Dockerized app** with a production-ready `Dockerfile`.
+* Optional **`docker-compose.yml`** (for Postgres mode); default is SQLite for quick wins.
+* **Health endpoint** (`GET /health`) so the deploy script/Nginx can verify the service.
+* **Standard PORT handling** (`process.env.PORT`, default `8080`) to work behind Nginx.
+* **Prisma setup (optional)** with **SQLite** by default (works anywhere), Postgres via Compose.
+* A **deployment script** (in a sibling repo) that:
+
+  * Installs Docker + Nginx on the server,
+  * Builds & runs the container(s),
+  * Creates an Nginx reverse proxy on port 80,
+  * Validates the app and logs everything.
+
+---
+
+## Repo Structure
+
+```
+.
+├─ src/
+│  ├─ app.js          # Express app (includes /health)
+│  └─ server.js       # Boots app; listens on PORT (default 8080)
+├─ prisma/
+│  └─ schema.prisma   # SQLite by default (easy local + container)
+├─ package.json
+├─ Dockerfile
+├─ docker-compose.yml # (optional) enables Postgres mode
+├─ .dockerignore
+├─ .env.example
+└─ README.md
+```
+
+---
+
+## API Quick Start
+
+### Install & run (no Docker)
+
+```bash
+# clone & install
+npm ci  # or: npm install
+
+# copy env template and adjust if needed
+cp .env.example .env
+
+# run (uses PORT=8080 by default)
+npm start
+```
+
+### Health check
+
+```bash
+curl -s http://localhost:8080/health
+# → {"ok":true}
+```
+
+---
+
+## Docker (Mode A: SQLite — fastest path)
+
+This mode requires **no external DB**. Prisma uses a local SQLite file inside the container/volume.
+
+```bash
+# build
+docker build -t string-analyzer .
+
+# run (map 8080 on host → 8080 in container)
+docker run --rm -p 8080:8080 \
+  -e PORT=8080 \
+  -e DATABASE_URL="file:./dev.db" \
+  string-analyzer
+
+# verify
+curl -s http://localhost:8080/health
+```
+
+> If you see Prisma warnings about OpenSSL, this image installs `openssl` to keep Prisma happy.
+
+---
+
+## Docker Compose (Mode B: Postgres — optional)
+
+If you want a real Postgres DB (locally or on the server), use Compose:
+
+```bash
+# start both db + app
+docker compose up -d --build
+
+# verify
+curl -s http://localhost:8080/health
+```
+
+**Compose details**
+
+* App listens on `8080`
+* DB URI (inside app): `postgresql://analyzer:analyzer@db:5432/analyzer?schema=public`
+* On startup, app runs `prisma db push` to create/update schema
+
+---
+
+## Environment Variables
+
+| Variable       | Default         | Notes                                                                        |
+| -------------- | --------------- | ---------------------------------------------------------------------------- |
+| `PORT`         | `8080`          | App listens here; Nginx proxies 80 → PORT                                    |
+| `DATABASE_URL` | `file:./dev.db` | SQLite (Mode A) — for Compose/Postgres, value is set in `docker-compose.yml` |
+
+Copy `.env.example` to `.env` for local runs:
+
+```env
+PORT=8080
+DATABASE_URL="file:./dev.db"
+```
+
+---
+
+## Endpoints (core examples)
+
+* `GET /health` → `{ "ok": true }`
+* `POST /strings` → analyzes a string and stores results
+  Example:
+
+  ```bash
+  curl -s -X POST http://localhost:8080/strings \
+    -H "Content-Type: application/json" \
+    -d '{"value":"racecar is a level kayak"}'
+  ```
+
+---
+
+## Deploying with the Stage-1 DevOps Script
+
+The deployment happens from a **separate repo** that contains `deploy.sh`.
+Steps below assume you already have:
+
+* A reachable Ubuntu server (public IP, SSH access),
+* Your SSH key,
+* A GitHub **Personal Access Token** (PAT) with `repo` read access.
+
+### 1) Run the script locally
+
+```bash
+# in the deploy script repo
+chmod +x deploy.sh
+./deploy.sh
+```
+
+### 2) Fill the prompts
+
+* **Git Repository URL**: `https://github.com/<you>/<this-repo>.git`
+* **GitHub PAT**: your token
+* **Branch**: `main` (or your branch)
+* **SSH username**: usually `ubuntu`
+* **Server IP**: your VM’s public IP
+* **SSH key path**: path to your private key (`~/.ssh/<key>.pem`)
+* **Internal port**: `8080`
+
+The script will:
+
+* Install Docker + Nginx on the server if missing,
+* Sync this repo,
+* Build & run the container (or Compose, if `docker-compose.yml` exists),
+* Create an Nginx site that proxies `http://SERVER_IP` → `http://127.0.0.1:8080`,
+* Validate and print a log filename.
+
+### 3) Verify
+
+```bash
+curl -i http://<SERVER_IP>/health
+curl -i http://<SERVER_IP>/
+```
+
+Open in a browser: `http://<SERVER_IP>`
+
+---
+
+## Troubleshooting
+
+**Nginx shows default page or 502?**
+
+* Ensure the app actually listens on the port you provided (default 8080).
+* Check and reload Nginx:
+
+  ```bash
+  sudo nginx -t
+  sudo systemctl reload nginx
+  ```
+
+**Cannot reach `http://<SERVER_IP>`**
+
+* Open port 80 on your cloud firewall/security group.
+* On the VM:
+
+  ```bash
+  sudo ufw allow 'Nginx Full'
+  sudo ufw status
+  ```
+
+**Container not running / crashing**
+
+```bash
+docker ps
+docker logs <container_name>
+```
+
+**Prisma issues**
+
+* Confirm `prisma/schema.prisma` exists.
+* Ensure `DATABASE_URL` is set (SQLite or Postgres).
+* We run `prisma generate` at build time and `prisma db push` at start (Compose) or you can run:
+
+  ```bash
+  npm run prisma:generate
+  npm run prisma:push
+  ```
+
+---
+
+## Validation Checklist (what reviewers look for)
+
+* App runs in Docker and responds on `/health`.
+* `PORT` is respected (reverse-proxies cleanly from Nginx:80 → app:PORT).
+* Deploy script completes without manual server edits.
+* Re-running the script **redeploys idempotently** (no duplicate networks/containers).
+* Logs exist (e.g., `deploy_YYYYMMDD_HHMMSS.log`).
+
+---
+
+## Changelog (DevOps upgrade)
+
+* **Added** `Dockerfile` for Node 20-alpine (+ `openssl`)
+* **Added** `docker-compose.yml` (optional Postgres)
+* **Added** `GET /health`
+* **Standardized** `PORT` handling (default `8080`)
+* **Added** Prisma SQLite schema + `.env.example`
+* **Documented** Stage-1 DevOps deployment via `deploy.sh`
+
+---
+
+## License
+
+MIT (or your choice)
+
+---
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
 # String Analyzer API (Stage 1)
 
 A small REST API that analyzes input strings and stores their computed properties.
